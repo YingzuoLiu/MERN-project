@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Finance Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .container { max-width: 800px; margin: auto; }
+  </style>
+</head>
+<body>
+  <div id="app" class="container"></div>
+  <script type="text/babel">
+    const apiUrl = 'http://localhost:5000/api';
+    function App() {
+      const [token, setToken] = React.useState(localStorage.getItem('token'));
+      const [transactions, setTransactions] = React.useState([]);
+      const [description, setDescription] = React.useState('');
+      const [amount, setAmount] = React.useState(0);
+      const [category, setCategory] = React.useState('General');
+
+      React.useEffect(() => {
+        if (token) {
+          fetch(`${apiUrl}/transactions`, { headers: { Authorization: `Bearer ${token}` } })
+            .then(r => r.json()).then(setTransactions);
+        }
+      }, [token]);
+
+      React.useEffect(() => {
+        if (!transactions.length) return;
+        const ctx = document.getElementById('chart').getContext('2d');
+        new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: transactions.map(t => new Date(t.createdAt).toLocaleDateString()),
+            datasets: [{ label: 'Amount', data: transactions.map(t => t.amount), borderColor: 'blue' }]
+          }
+        });
+      }, [transactions]);
+
+      const login = async (username, password) => {
+        const res = await fetch(`${apiUrl}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        if (res.ok) {
+          const { token } = await res.json();
+          localStorage.setItem('token', token);
+          setToken(token);
+        }
+      };
+
+      const register = async (username, password) => {
+        await fetch(`${apiUrl}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        login(username, password);
+      };
+
+      const addTransaction = () => {
+        fetch(`${apiUrl}/transactions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ description, amount: parseFloat(amount), category })
+        })
+        .then(r => r.json())
+        .then(t => setTransactions([...transactions, t]));
+      };
+
+      return (
+        <div>
+          <h1>Finance Tracker</h1>
+          {!token && (
+            <AuthForm onLogin={login} onRegister={register} />
+          )}
+          {token && (
+            <>
+          <div>
+            <input placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} />
+            <input type="number" placeholder="Amount" value={amount} onChange={e => setAmount(e.target.value)} />
+            <input placeholder="Category" value={category} onChange={e => setCategory(e.target.value)} />
+            <button onClick={addTransaction}>Add</button>
+          </div>
+          <h2>Transactions</h2>
+          <ul>
+            {transactions.map(t => <li key={t._id}>{t.description}: {t.amount} ({t.category})</li>)}
+          </ul>
+          <canvas id="chart" height="100"></canvas>
+          </>
+          )}
+        </div>
+      );
+    }
+
+    function AuthForm({ onLogin, onRegister }) {
+      const [username, setUsername] = React.useState('');
+      const [password, setPassword] = React.useState('');
+      return (
+        <div>
+          <input placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} />
+          <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} />
+          <button onClick={() => onLogin(username, password)}>Login</button>
+          <button onClick={() => onRegister(username, password)}>Register</button>
+        </div>
+      );
+    }
+    ReactDOM.render(<App />, document.getElementById('app'));
+  </script>
+</body>
+</html>
